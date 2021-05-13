@@ -33,7 +33,7 @@ class Index:
         for hook, pipe in cls.HOOKS:
             if hasattr(cls, hook):
                 hook_action = getattr(cls, hook)
-                setattr(cls, hook, pipe.add_action(hook.split("_")[0])(hook_action))
+                setattr(cls, hook, pipe.add_action(hook.split("_")[0])(hook_action), pipe_position=0)
 
     @classmethod
     def get_name(cls):
