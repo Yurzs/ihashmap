@@ -13,6 +13,11 @@ class IndexContainer(collections.UserList):
         bisect.insort(self.data, item)
 
 
+class DuplicateKeyError(Exception):
+    def __init__(self, value, index_name):
+        super().__init__(f"Duplicate value '{value}' for index '{index_name}")
+
+
 class Index:
     """Sub-mapping representation that is stored separately for quick search."""
 
@@ -83,10 +88,12 @@ class Index:
         """
 
         value = ctx.local_data["original_value"]
-        index_data = set(cls.get(ctx.name))
-        index_data.add(cls.get_index(value))
-        index_data = IndexContainer(index_data)
-        cls.set(ctx.name, index_data)
+        index_data = cls.get(ctx.name)
+        if not cls.get_index(value) in index_data:
+            index_data.append(cls.get_index(value))
+            cls.set(ctx.name, index_data)
+        else:
+            raise DuplicateKeyError(cls.get_index(value), cls.get_name(ctx.name))
 
     @classmethod
     def before_delete(cls, ctx: PipelineContext):
@@ -112,9 +119,8 @@ class Index:
         :param dict ctx: PipelineManager context.
         """
 
-        index_data = set(cls.get(ctx.name))
+        index_data = cls.get(ctx.name)
         index_data.remove(ctx.local_data["before_delete"][cls.__name__]["keys"])
-        index_data = IndexContainer(index_data)
         cls.set(ctx.name, index_data)
 
     @classmethod
@@ -133,13 +139,8 @@ class Index:
 
         value = ctx.local_data["original_value"]
         if cls.get_index(value.__shadow_copy__) != cls.get_index(ctx.result):
-            index_data = set(cls.get(ctx.name))
-            try:
-                index_data.remove(cls.get_index(value.__shadow_copy__))
-            except ValueError:
-                pass
-            index_data.add(cls.get_index(ctx.result))
-            index_data = IndexContainer(index_data)
+            index_data = cls.get(ctx.name)
+            index_data.remove(cls.get_index(value.__shadow_copy__))
             cls.set(ctx.name, index_data)
 
     @classmethod
