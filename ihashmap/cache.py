@@ -372,6 +372,8 @@ class Cache:
     def _set(self, name, key, value):
         """Internal method. PLEASE DONT CHANGE!"""
 
+        if isinstance(value, dict):
+            value = collections.UserDict(value)
         return self.SET_METHOD(name, key, value)
 
     @PIPELINE.update
