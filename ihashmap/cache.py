@@ -1,9 +1,33 @@
+import collections
+import concurrent.futures
 import copy
 import functools
 import types
 import typing
+from concurrent.futures.thread import ThreadPoolExecutor
 
 from ihashmap.action import Action
+
+
+def parallelize(func, iterable, executor=None, max_workers=5, unpack=True, **kwargs):
+    """Parallelize multiple blocking sync functions."""
+
+    executor = executor or ThreadPoolExecutor(max_workers=max_workers)
+
+    with executor as ex:
+        if unpack:
+            return [
+                result
+                for results in ex.map(functools.partial(func, **kwargs), iterable)
+                for result in results
+                if result is not None
+            ]
+
+        return [
+            result
+            for result in ex.map(functools.partial(func, **kwargs), iterable)
+            if result is not None
+        ]
 
 
 class PipelineContext:
@@ -268,12 +292,32 @@ class Cache:
             matched.append(value)
         return matched
 
+    def _match_and_get(self, value: dict, queries: list, name):
+        """Matches multiple queries if successful gets key from cache.
+
+        :param value: value to match against pattern.
+        :param list [dict, bool] queries: Pairs of query/is_index pairs.
+        """
+
+        for query, is_index in queries:
+            if not query:
+                continue
+
+            matched = self._match_query(value, query, is_index=is_index)
+            if matched:
+                value = matched[0]
+            else:
+                return
+
+        return self._get(name, value[self.PRIMARY_KEY])
+
     def search(
         self,
         name: str,
         search_query: typing.Mapping[
             str, typing.Union[str, int, tuple, list, typing.Callable]
         ],
+        executor: concurrent.futures.Executor = None,
     ) -> typing.List[typing.Mapping]:
         """Searches cache for required values based on search query.
 
@@ -281,6 +325,7 @@ class Cache:
         :param dict search_query: search key:value to match.
                                   Values can be any builtin type
                                   or function to which value will be passed as argument.
+        :param executor: Executor to run parallel task in.
         :return: list of matching values.
         """
 
@@ -292,11 +337,13 @@ class Cache:
             index_match.append(
                 len(set(index.keys).intersection(search_query)) / len(search_query)
             )
+
         best_choice_index = index_match.index(max(index_match))
         best_index = indexes[best_choice_index]
+
         index_data = set(best_index.get(name))
         index_data = best_index.get_values(index_data)
-        matched = []
+
         subquery = {
             key: value for key, value in search_query.items() if key in best_index.keys
         }
@@ -305,13 +352,15 @@ class Cache:
             for key, value in search_query.items()
             if key not in best_index.keys
         }
-        for value in index_data:
-            matched += self._match_query(value, subquery, is_index=True)
-        result = []
-        for value in matched:
-            entity = self._get(name, value[self.PRIMARY_KEY])
-            result += self._match_query(entity, rest_query)
-        return result
+
+        return parallelize(
+            func=self._match_and_get,
+            iterable=index_data,
+            queries=[(subquery, True), (rest_query, False)],
+            name=name,
+            executor=executor,
+            unpack=False,
+        )
 
     @PIPELINE.get
     def _get(self, name: str, key: str, default: typing.Optional[typing.Any] = None):
