@@ -5,19 +5,23 @@
 
 Name:           python-%{pkgname}
 Version:        %package_version
-Release:        1%{dist}
+Release:        1.ROCKIT3%{dist}
 Summary:        Indexed hashmap wrapper in Python
-
 Group:          Libraries
 License:        MIT
 Source:         %{name}-%{version}.tar.gz
-
 BuildArch:      noarch
-BuildRequires:  python%{python3_pkgversion}-devel python%{python3_pkgversion}-setuptools
-
-Provides:       python-%{pkgname}
 
 %description
+Automaticly indexed hashmap for quick search and wrapper for things that don't expose .keys method
+
+%package -n python%{python3_pkgversion}-%{pkgname}
+Summary:        Indexed hashmap wrapper in Python
+BuildRequires:  python%{python3_pkgversion}-devel python%{python3_pkgversion}-setuptools
+Provides:       python-%{pkgname}
+Obsoletes:      python-ihashmap
+
+%description -n python%{python3_pkgversion}-%{pkgname}
 Automaticly indexed hashmap for quick search and wrapper for things that don't expose .keys method
 
 %prep
@@ -32,6 +36,6 @@ Automaticly indexed hashmap for quick search and wrapper for things that don't e
 %clean
 rm -rf %buildroot
 
-%files
+%files -n python%{python3_pkgversion}-%{pkgname}
 %{python3_sitelib}/%{pkgname}/
 %{python3_sitelib}/%{pkgname}-%{version}-py%{python3_version}.egg-info/
